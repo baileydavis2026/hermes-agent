@@ -1665,6 +1665,13 @@ class GatewayRunner:
                 return None
             return BlueBubblesAdapter(config)
 
+        elif platform == Platform.SESAME:
+            from gateway.platforms.sesame import SesameAdapter, check_sesame_requirements
+            if not check_sesame_requirements():
+                logger.warning("Sesame: SESAME_API_KEY not set")
+                return None
+            return SesameAdapter(config)
+
         return None
     
     def _is_user_authorized(self, source: SessionSource) -> bool:

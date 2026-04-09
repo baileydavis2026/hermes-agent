@@ -64,6 +64,7 @@ class Platform(Enum):
     FEISHU = "feishu"
     WECOM = "wecom"
     BLUEBUBBLES = "bluebubbles"
+    SESAME = "sesame"
 
 
 @dataclass
