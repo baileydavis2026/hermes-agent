@@ -49,6 +49,8 @@ def test_sesame_gateway_test_validates_identity_and_ws(monkeypatch, capsys):
     monkeypatch.setenv("SESAME_API_KEY", "sk_test_fake")
     monkeypatch.setenv("SESAME_API_URL", "https://api.example.test")
     monkeypatch.setenv("SESAME_WS_URL", "wss://ws.example.test")
+    monkeypatch.delenv("SESAME_HOME_CHANNEL", raising=False)
+    monkeypatch.delenv("SESAME_ALLOWED_USERS", raising=False)
     monkeypatch.setattr(gateway, "_sesame_requirements_ok", lambda: True)
     monkeypatch.setattr(gateway, "_SesameTestClient", _FakeSesameClient)
 

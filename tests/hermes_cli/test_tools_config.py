@@ -9,6 +9,7 @@ from hermes_cli.tools_config import (
     _apply_toolset_change,
     _configure_provider,
     _reconfigure_provider,
+    _get_enabled_platforms,
     _get_platform_tools,
     _platform_toolset_summary,
     _reconfigure_tool,
@@ -77,10 +78,35 @@ def test_get_platform_tools_uses_default_when_platform_not_configured():
 def test_configurable_toolsets_include_messaging():
     assert any(ts_key == "messaging" for ts_key, _, _ in CONFIGURABLE_TOOLSETS)
 
+
+def test_get_enabled_platforms_includes_sesame_when_configured(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_cli.tools_config.get_env_value",
+        lambda key: "token" if key == "SESAME_API_KEY" else None,
+    )
+
+    enabled = _get_enabled_platforms()
+
+    assert "sesame" in enabled
+
+
 def test_get_platform_tools_default_telegram_includes_messaging():
     enabled = _get_platform_tools({}, "telegram")
 
     assert "messaging" in enabled
+
+
+def test_get_platform_tools_default_sesame_includes_core_agent_tools():
+    """Sesame is a first-class gateway platform and must not fall back to
+    unknown-plugin defaults. The default Sesame session needs the same core
+    tool categories as Telegram so Ryan's DM sessions can actually execute
+    tools instead of degrading to text-only mode.
+    """
+    enabled = _get_platform_tools({}, "sesame", include_default_mcp_servers=False)
+
+    for ts in ("terminal", "file", "skills", "todo", "memory", "session_search", "delegation"):
+        assert ts in enabled, f"{ts} should be enabled for Sesame by default"
+    assert enabled.isdisjoint(_DEFAULT_OFF_TOOLSETS)
 
 
 def test_get_platform_tools_default_whatsapp_includes_web():
