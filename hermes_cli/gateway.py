@@ -41,6 +41,89 @@ from hermes_cli.colors import Colors, color
 
 logger = logging.getLogger(__name__)
 
+
+def _sesame_requirements_ok() -> bool:
+    """Return True when Sesame's optional gateway dependencies import."""
+    try:
+        from gateway.platforms.sesame import check_sesame_requirements
+
+        return check_sesame_requirements()
+    except Exception as exc:
+        print_error(f"Could not load Sesame adapter: {exc}")
+        return False
+
+
+def _SesameTestClient(api_url: str, ws_url: str, api_key: str):  # noqa: N802 - test seam
+    from gateway.platforms.sesame import SesameClient
+
+    return SesameClient(api_url, ws_url, api_key)
+
+
+async def _run_sesame_gateway_test_async(args) -> int:
+    api_key = os.getenv("SESAME_API_KEY") or get_env_value("SESAME_API_KEY")
+    if not api_key:
+        print_error("SESAME_API_KEY is not configured")
+        print("  Run: hermes gateway setup")
+        print("  Select: Sesame")
+        print("  Then restart: hermes gateway restart")
+        return 1
+
+    if not _sesame_requirements_ok():
+        print_error("Sesame gateway dependencies are missing")
+        print("  Run: pip install 'hermes-agent[messaging]'")
+        return 1
+
+    api_url = os.getenv("SESAME_API_URL") or get_env_value("SESAME_API_URL") or "https://api.sesame.space"
+    ws_url = os.getenv("SESAME_WS_URL") or get_env_value("SESAME_WS_URL") or "wss://ws.sesame.space"
+    home_channel = getattr(args, "channel", None) or os.getenv("SESAME_HOME_CHANNEL") or get_env_value("SESAME_HOME_CHANNEL")
+    client = _SesameTestClient(api_url.rstrip("/"), ws_url.rstrip("/"), api_key)
+
+    print_header("Testing Sesame Gateway")
+    print(f"API: {api_url}")
+    print(f"WS:  {ws_url}")
+    try:
+        identity = await client.fetch_identity()
+        handle = identity.get("handle") or identity.get("id")
+        display = identity.get("displayName") or handle
+        print_success(f"Authenticated as @{handle} ({display})")
+
+        await client.connect_ws()
+        print_success("WebSocket auth succeeded")
+
+        if getattr(args, "send_test_message", False):
+            if not home_channel:
+                print_error("No channel supplied and SESAME_HOME_CHANNEL is not set")
+                print("  Pass: hermes gateway test sesame --send-test-message --channel <channel-id>")
+                return 1
+            channel_id = str(home_channel).removeprefix("sesame:")
+            message = "Hermes Sesame gateway test: connection verified."
+            sent = await client.send_message(channel_id, message, intent="notification")
+            print_success(f"Sent test message to {channel_id} ({sent.get('id', 'ok')})")
+        elif not home_channel:
+            print_warning("SESAME_HOME_CHANNEL is not set; cron delivery with deliver='sesame' will not have a default target")
+        else:
+            print_success(f"Home channel configured: {str(home_channel).removeprefix('sesame:')}")
+
+        allowed_users = os.getenv("SESAME_ALLOWED_USERS") or get_env_value("SESAME_ALLOWED_USERS")
+        if allowed_users:
+            print_success("Allowed users configured")
+        else:
+            print_warning("SESAME_ALLOWED_USERS is empty; Sesame policy/pairing controls who can talk to this gateway")
+        return 0
+    except Exception as exc:
+        print_error(f"Sesame gateway test failed: {exc}")
+        return 1
+    finally:
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+
+
+def run_sesame_gateway_test(args) -> int:
+    """Validate Sesame gateway configuration and optional test delivery."""
+    return asyncio.run(_run_sesame_gateway_test_async(args))
+
 # =============================================================================
 # Process Management (for manual gateway runs)
 # =============================================================================
@@ -5441,6 +5524,16 @@ def _gateway_command_inner(args):
 
     elif subcmd == "list":
         _gateway_list()
+
+    elif subcmd == "test":
+        platform = getattr(args, "platform", "")
+        if platform == "sesame":
+            code = run_sesame_gateway_test(args)
+            if code:
+                sys.exit(code)
+        else:
+            print_error(f"Unsupported gateway test platform: {platform}")
+            sys.exit(1)
 
     elif subcmd == "migrate-legacy":
         # Stop, disable, and remove legacy Hermes gateway unit files from

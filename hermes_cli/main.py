@@ -10216,6 +10216,25 @@ def main():
     # gateway setup
     gateway_subparsers.add_parser("setup", help="Configure messaging platforms")
 
+    # gateway test
+    gateway_test = gateway_subparsers.add_parser(
+        "test", help="Validate a configured gateway platform"
+    )
+    gateway_test.add_argument(
+        "platform",
+        choices=["sesame"],
+        help="Gateway platform to test",
+    )
+    gateway_test.add_argument(
+        "--send-test-message",
+        action="store_true",
+        help="Send a test message after REST + realtime auth succeeds",
+    )
+    gateway_test.add_argument(
+        "--channel",
+        help="Target channel ID for --send-test-message (raw ID or sesame:<id>)",
+    )
+
     # gateway migrate-legacy
     gateway_migrate_legacy = gateway_subparsers.add_parser(
         "migrate-legacy",

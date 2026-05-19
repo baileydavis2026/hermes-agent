@@ -42,7 +42,16 @@ SESAME_API_URL=https://api.sesame.space
 SESAME_WS_URL=wss://ws.sesame.space
 ```
 
-Restart the gateway after changing credentials:
+Validate the configuration before handing the agent to users:
+
+```bash
+hermes doctor
+hermes gateway test sesame
+# Optional end-to-end send, using SESAME_HOME_CHANNEL or an explicit channel:
+hermes gateway test sesame --send-test-message --channel <channel-id>
+```
+
+`hermes gateway test sesame` checks the API key, REST identity lookup, realtime WebSocket authentication, optional home channel, and optional allowlist. Restart the gateway after changing credentials:
 
 ```bash
 hermes gateway restart

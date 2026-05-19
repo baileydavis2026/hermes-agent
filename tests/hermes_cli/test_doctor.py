@@ -51,6 +51,54 @@ class TestProviderEnvDetection:
         assert not _has_provider_env_config(content)
 
 
+class TestSesameDoctorChecks:
+    def test_skips_when_sesame_is_not_configured(self, monkeypatch, capsys):
+        monkeypatch.delenv("SESAME_API_KEY", raising=False)
+
+        issues: list[str] = []
+        doctor_mod._check_sesame_gateway_config(issues)
+
+        assert issues == []
+        assert capsys.readouterr().out == ""
+
+    def test_warns_about_missing_optional_dependencies(self, monkeypatch, capsys):
+        monkeypatch.setenv("SESAME_API_KEY", "sk_test_fake")
+        monkeypatch.delenv("SESAME_HOME_CHANNEL", raising=False)
+
+        def fake_find_spec(name):
+            if name in {"aiohttp", "websockets"}:
+                return None
+            raise AssertionError(name)
+
+        monkeypatch.setattr(doctor_mod.importlib.util, "find_spec", fake_find_spec)
+        issues: list[str] = []
+
+        doctor_mod._check_sesame_gateway_config(issues)
+
+        out = capsys.readouterr().out
+        assert "Sesame Gateway" in out
+        assert "aiohttp" in out
+        assert "websockets" in out
+        assert "SESAME_HOME_CHANNEL" in out
+        assert issues == ["Install Sesame gateway dependencies: uv pip install aiohttp websockets"]
+
+    def test_reports_ready_when_configured(self, monkeypatch, capsys):
+        monkeypatch.setenv("SESAME_API_KEY", "sk_test_fake")
+        monkeypatch.setenv("SESAME_HOME_CHANNEL", "chan_home")
+        monkeypatch.setenv("SESAME_ALLOWED_USERS", "principal-1")
+        monkeypatch.setattr(doctor_mod.importlib.util, "find_spec", lambda name: object())
+
+        issues: list[str] = []
+        doctor_mod._check_sesame_gateway_config(issues)
+
+        out = capsys.readouterr().out
+        assert "Sesame API key configured" in out
+        assert "Sesame realtime dependencies" in out
+        assert "Sesame home channel configured" in out
+        assert "Sesame allowlist configured" in out
+        assert issues == []
+
+
 class TestDoctorEnvFileEncoding:
     """Regression for #18637 (bug 3): `hermes doctor` crashed on Windows
     Chinese locale (GBK) because `.env` was read with Path.read_text() which

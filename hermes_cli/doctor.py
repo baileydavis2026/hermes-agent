@@ -105,6 +105,38 @@ def _has_provider_env_config(content: str) -> bool:
     return any(key in content for key in _PROVIDER_ENV_HINTS)
 
 
+def _check_sesame_gateway_config(issues: list[str]) -> None:
+    """Emit focused diagnostics when the native Sesame gateway is configured."""
+    if not os.getenv("SESAME_API_KEY"):
+        return
+
+    _section("Sesame Gateway")
+    check_ok("Sesame API key configured")
+
+    missing_deps = [
+        module for module in ("aiohttp", "websockets")
+        if importlib.util.find_spec(module) is None
+    ]
+    if missing_deps:
+        joined = ", ".join(missing_deps)
+        check_warn("Sesame realtime dependencies missing", f"({joined})")
+        issues.append(f"Install Sesame gateway dependencies: {_python_install_cmd()} {' '.join(missing_deps)}")
+    else:
+        check_ok("Sesame realtime dependencies")
+
+    if os.getenv("SESAME_HOME_CHANNEL"):
+        check_ok("Sesame home channel configured")
+    else:
+        check_warn("SESAME_HOME_CHANNEL not set", "(cron deliver='sesame' needs a default channel)")
+
+    if os.getenv("SESAME_ALLOWED_USERS") or os.getenv("SESAME_ALLOW_ALL_USERS"):
+        check_ok("Sesame allowlist configured")
+    else:
+        check_warn("SESAME_ALLOWED_USERS not set", "(Sesame policy/pairing still applies)")
+
+    check_info("Run 'hermes gateway test sesame' to validate REST + realtime auth")
+
+
 def _honcho_is_configured_for_doctor() -> bool:
     """Return True when Honcho is configured, even if this process has no active session."""
     try:
@@ -481,6 +513,8 @@ def run_doctor(args):
             check_ok(name, "(optional)")
         except ImportError:
             check_warn(name, "(optional, not installed)")
+
+    _check_sesame_gateway_config(issues)
     
     _section("Configuration Files")
     # Check ~/.hermes/.env (primary location for user config)
